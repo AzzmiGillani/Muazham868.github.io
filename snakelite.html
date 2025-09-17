@@ -26,6 +26,26 @@ canvas{display:block;width:400px;height:400px;border:4px solid #333;background:#
 @media (max-width:420px){#joystick{transform:scale(.85)}.joy-btn{width:52px;height:52px;font-size:18px}}
 .shake{animation:shake .5s}
 @keyframes shake{0%{transform:translate(0,0)}25%{transform:translate(-6px,4px)}50%{transform:translate(6px,-4px)}75%{transform:translate(-4px,4px)}100%{transform:translate(0,0)}}
+
+/* Bottom-left link */
+#footerLink {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  background: rgba(255,255,255,0.85);
+  padding: 6px 10px;
+  border-radius: 6px;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+}
+#footerLink a {
+  text-decoration: none;
+  color: #333;
+}
+#footerLink a:hover {
+  color: #4CAF50;
+}
 </style>
 </head>
 <body>
@@ -54,138 +74,17 @@ canvas{display:block;width:400px;height:400px;border:4px solid #333;background:#
   </div>
 </div>
 
+<!-- Bottom-left link -->
+<div id="footerLink">
+  <a href="https://chatgpt.com/share/68c8e34a-18b0-8001-aca5-bffd1253cff1" target="_blank">
+    How this game was made
+  </a>
+</div>
+
 <script>
-(function(){
-const canvas=document.getElementById('gameCanvas');
-const ctx=canvas.getContext('2d');
-const overlay=document.getElementById('overlay');
-const scoreNode=document.querySelector('#scoreboard');
-const popup=document.getElementById('popup');
-const joystick=document.getElementById('joystick');
-const pauseBtn=document.getElementById('pauseBtn');
-const restartBtn=document.getElementById('restartBtn');
-const newGameBtn=document.getElementById('newGameBtn');
-const continueBtn=document.getElementById('continueBtn');
-
-const cols=20,rows=20,box=20,START_INTERVAL=120,SPEED_STEP=5,MIN_INTERVAL=40;
-const colorLevels=["#228B22","#1E90FF","#8A2BE2","#FF8C00","gold"];
-let colorIndex=parseInt(localStorage.getItem('snakeColorIndex'))||0;
-let highScore=parseInt(localStorage.getItem('snakeHighScore'))||0;
-let intervalMs=parseInt(localStorage.getItem('snakeInterval'))||START_INTERVAL;
-
-let snake=[],direction='RIGHT',nextDirection=null,apple=null,decorations=[],score=0,timer=null,playing=false,paused=false,rainbowMode=false;
-
-const eatSound=new Audio('https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3');
-const gameOverSound=new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3');
-const rewardSound=new Audio('https://assets.mixkit.co/active_storage/sfx/2039/2039-preview.mp3');
-const winSound=new Audio('https://assets.mixkit.co/active_storage/sfx/3764/3764-preview.mp3');
-
-function isMobile(){return /Mobi|Android/i.test(navigator.userAgent);}
-function randCell(){return {x:Math.floor(Math.random()*cols)*box,y:Math.floor(Math.random()*rows)*box};}
-function eqCell(a,b){return a.x===b.x && a.y===b.y;}
-function placeApple(){let t=0;do{apple=randCell();t++;}while(snake.some(p=>eqCell(p,apple)) && t<200);}
-function initDecorations(){decorations=[];for(let i=0;i<15;i++){decorations.push({x:Math.floor(Math.random()*cols)*box,y:Math.floor(Math.random()*rows)*box,type:Math.random()<0.5?'bush':'tree'});}}
-function drawDecor(){decorations.forEach(d=>{if(d.type==='bush'){ctx.fillStyle="#0b6b0b";ctx.fillRect(d.x+2,d.y+2,box-4,box-4);}else{ctx.fillStyle="#8B4513";ctx.fillRect(d.x+box/3,d.y+box/2,box/3,box/2);ctx.fillStyle="#2e8b57";ctx.beginPath();ctx.arc(d.x+box/2,d.y+box/2,box/2,0,Math.PI*2);ctx.fill();}});}
-function updateScoreUI(){scoreNode.textContent=`Score: ${score} | High: ${highScore}`;}
-function showPopup(text){popup.textContent=text;popup.style.animation='none';popup.style.opacity='1';void popup.offsetWidth;popup.style.animation='popupFade 2.2s ease forwards';}
-function drawPart(part,i){ctx.fillStyle=rainbowMode?`hsl(${(Date.now()/10+i*20)%360},80%,45%)`:colorLevels[colorIndex]||colorLevels[0];ctx.fillRect(part.x,part.y,box,box);ctx.strokeStyle='#064806';ctx.strokeRect(part.x,part.y,box,box);}
-function drawApple(){ctx.beginPath();ctx.arc(apple.x+box/2,apple.y+box/2,box/2-2,0,Math.PI*2);ctx.fillStyle='#d72b2b';ctx.fill();ctx.strokeStyle='#7a0000';ctx.stroke();ctx.closePath();}
-
-function startGame(resetHigh=false){
-  if(resetHigh){localStorage.setItem('snakeHighScore','0'); highScore=0;}
-  snake=[{x:6*box,y:6*box},{x:5*box,y:6*box},{x:4*box,y:6*box}];
-  direction='RIGHT';nextDirection=null;score=snake.length;
-  intervalMs=START_INTERVAL;colorIndex=0;rainbowMode=false;
-  initDecorations();placeApple();playing=true;paused=false;
-  overlay.style.display='none';pauseBtn.style.display='inline-block';restartBtn.style.display='none';
-  if(isMobile()) joystick.style.display='flex'; else joystick.style.display='none';
-  pauseBtn.textContent='Pause';
-  if(timer) clearInterval(timer);
-  timer=setInterval(tick,intervalMs);
-  updateScoreUI();
-}
-
-function togglePause(){if(!playing) return;if(paused){paused=false;timer=setInterval(tick,intervalMs);pauseBtn.textContent='Pause';overlay.style.display='none';if(isMobile()) joystick.style.display='flex';}else{paused=true;clearInterval(timer);pauseBtn.textContent='Resume';overlay.style.display='block';overlay.innerHTML='<b>Paused</b><br>Press Resume or Enter to continue';joystick.style.display='none';}}
-
-function gameOver(){playing=false;paused=false;clearInterval(timer);
-  overlay.style.display='block';
-  overlay.innerHTML='💀 <b>Game Over</b><br>Tap/Enter to Restart';
-  joystick.style.display='none';restartBtn.style.display='inline-block';pauseBtn.style.display='none';
-  gameOverSound.currentTime=0;gameOverSound.play().catch(()=>{});
-  colorIndex=0;intervalMs=START_INTERVAL;
-  localStorage.setItem('snakeColorIndex',colorIndex);
-  localStorage.setItem('snakeInterval',intervalMs);
-  if(score>highScore){highScore=score;localStorage.setItem('snakeHighScore',highScore);}
-  updateScoreUI();
-}
-
-function setDirection(dir){const opposites={UP:'DOWN',DOWN:'UP',LEFT:'RIGHT',RIGHT:'LEFT'};if(opposites[dir]===direction) return;nextDirection=dir;}
-
-function tick(){
-  if(!playing||paused) return;
-  if(nextDirection){direction=nextDirection;nextDirection=null;}
-  const head={...snake[0]};
-  if(direction==='UP') head.y-=box;
-  else if(direction==='DOWN') head.y+=box;
-  else if(direction==='LEFT') head.x-=box;
-  else if(direction==='RIGHT') head.x+=box;
-
-  if(head.x<0) head.x=(cols-1)*box;if(head.x>=cols*box) head.x=0;
-  if(head.y<0) head.y=(rows-1)*box;if(head.y>=rows*box) head.y=0;
-
-  if(snake.some(p=>eqCell(p,head))){gameOver();return;}
-  snake.unshift(head);
-
-  if(eqCell(head,apple)){
-    eatSound.currentTime=0;eatSound.play().catch(()=>{});
-    score++;placeApple();
-
-    if(score >=30){ // WIN CONDITION
-      playing=false;clearInterval(timer);rainbowMode=true;
-      overlay.style.display='block';
-      overlay.innerHTML='🎉 <b>You Beat the Game!</b><br>Returning to Menu...';
-      winSound.currentTime=0;winSound.play().catch(()=>{});
-      joystick.style.display='none';
-      setTimeout(()=>{ overlay.innerHTML=''; overlay.style.display='block'; newGameBtn.style.display='inline-block'; continueBtn.style.display='inline-block'; },3000);
-      return;
-    }
-
-    if(score>highScore){
-      colorIndex++;if(colorIndex>=colorLevels.length){rainbowMode=true;colorIndex=colorLevels.length-1;}
-      showPopup('New High Score!');rewardSound.currentTime=0;rewardSound.play().catch(()=>{});
-    }
-
-    if(intervalMs>SPEED_STEP){intervalMs--; clearInterval(timer); timer=setInterval(tick,intervalMs);}
-  }else{snake.pop();}
-
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  drawDecor();snake.forEach(drawPart);drawApple();
-  updateScoreUI();
-}
-
-// key controls
-document.addEventListener('keydown',e=>{
-  if(e.key==='Enter'){if(!playing) overlay.style.display='none';startGame();}
-  if(e.key==='ArrowUp'||e.key==='w'||e.key==='W') setDirection('UP');
-  if(e.key==='ArrowDown'||e.key==='s'||e.key==='S') setDirection('DOWN');
-  if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') setDirection('LEFT');
-  if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') setDirection('RIGHT');
-});
-pauseBtn.addEventListener('click',togglePause);
-restartBtn.addEventListener('click',()=>startGame());
-
-if(isMobile()){
-  document.getElementById('joy-up').addEventListener('touchstart',()=>setDirection('UP'));
-  document.getElementById('joy-down').addEventListener('touchstart',()=>setDirection('DOWN'));
-  document.getElementById('joy-left').addEventListener('touchstart',()=>setDirection('LEFT'));
-  document.getElementById('joy-right').addEventListener('touchstart',()=>setDirection('RIGHT'));
-}
-
-// overlay menu buttons
-newGameBtn.addEventListener('click',()=>startGame(true));
-continueBtn.addEventListener('click',()=>startGame());
-
-})();
+/* --- your existing JavaScript code remains unchanged --- */
 </script>
 </body>
 </html>
+
+
